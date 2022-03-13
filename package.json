@@ -16,7 +16,8 @@
     "clean": "rimraf lib",
     "watch": "node esbuild.js --watch",
     "build": "node esbuild.js",
-    "prepare": "node esbuild.js"
+    "prepare": "node esbuild.js",
+    "generate": "ts-node scripts/generate.ts"
   },
   "prettier": {
     "singleQuote": true,
@@ -34,9 +35,11 @@
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.0.0",
     "find-up": "^5.0.0",
+    "pjson": "^1.0.9",
     "prettier": "^2.5.1",
     "rimraf": "^3.0.2",
     "trash-cli": "^5.0.0",
+    "ts-node": "^10.7.0",
     "typescript": "^4.6.2"
   },
   "activationEvents": [
