@@ -1,8 +1,5 @@
-import { workspace as Workspace, window as Window, Uri } from 'coc.nvim';
-import path from 'path';
-import fs from 'fs';
-import os from 'os';
-import { execSync } from 'child_process';
+import { workspace, Uri } from 'coc.nvim';
+import { spawn } from 'child_process';
 import detectIndent from 'detect-indent';
 import findUp from 'find-up';
 import IPHPFmtConfig from './IPHPFmtConfig';
@@ -20,7 +17,7 @@ class PHPFmt {
   }
 
   public loadSettings(): void {
-    this.config = Workspace.getConfiguration('phpfmt') as any;
+    this.config = workspace.getConfiguration('phpfmt') as any;
     this.args.length = 0;
 
     if (this.config.custom_arguments !== '') {
@@ -88,117 +85,57 @@ class PHPFmt {
     return this.config;
   }
 
-  private getArgs(fileName: string): Array<string> {
-    const args: Array<string> = this.args.slice(0);
-    args.push(`"${fileName}"`);
-    return args;
-  }
-
-  public format(text: string): Promise<string> {
+  public format(text: string, cwd?: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-      if (this.config.detect_indent) {
-        const indentInfo = detectIndent(text);
-        if (!indentInfo.type) {
-          // fallback to default
-          this.args.push('--indent_with_space');
-        } else if (indentInfo.type === 'space') {
-          this.args.push(`--indent_with_space=${indentInfo.amount}`);
-        }
-      } else {
-        if (this.config.indent_with_space !== 4 && this.config.psr2) {
-          return reject(new Error('phpfmt: For PSR2, code MUST use 4 spaces for indenting, not tabs.'));
-        }
-      }
-
       let iniPath: string | undefined;
-      const execOptions = { cwd: '' };
-      if (Window.activeTextEditor) {
-        execOptions.cwd = path.dirname(Uri.parse(Window.activeTextEditor.document.uri).fsPath);
 
-        const workspaceFolders = Workspace.workspaceFolders;
-        if (workspaceFolders) {
-          iniPath = findUp.sync('.phpfmt.ini', {
-            cwd: execOptions.cwd,
-          });
-          const origIniPath = iniPath;
+      const workspaceFolders = workspace.workspaceFolders;
+      if (workspaceFolders) {
+        iniPath = findUp.sync('.phpfmt.ini', { cwd });
+        const origIniPath = iniPath;
 
-          for (const workspaceFolder of workspaceFolders) {
-            if (origIniPath && origIniPath.startsWith(Uri.parse(workspaceFolder.uri).fsPath)) {
-              break;
-            } else {
-              iniPath = undefined;
-            }
+        for (const workspaceFolder of workspaceFolders) {
+          if (origIniPath && origIniPath.startsWith(Uri.parse(workspaceFolder.uri).fsPath)) {
+            break;
+          } else {
+            iniPath = undefined;
           }
         }
       }
 
-      try {
-        const stdout: Buffer = execSync(`${this.config.php_bin} -r "echo PHP_VERSION_ID;"`, execOptions);
-        if (Number(stdout.toString()) < 50600 && Number(stdout.toString()) > 80000) {
-          return reject(new Error('phpfmt: PHP version < 5.6 or > 8.0'));
+      if (iniPath == undefined) {
+        if (this.config.detect_indent) {
+          const indentInfo = detectIndent(text);
+          if (!indentInfo.type) {
+            // fallback to default
+            this.args.push('--indent_with_space');
+          } else if (indentInfo.type === 'space') {
+            this.args.push(`--indent_with_space=${indentInfo.amount}`);
+          }
+        } else {
+          if (this.config.indent_with_space !== 4 && this.config.psr2) {
+            return reject(new Error('phpfmt: For PSR2, code MUST use 4 spaces for indenting, not tabs.'));
+          }
         }
-      } catch (err) {
-        return reject(new Error(`phpfmt: php_bin "${this.config.php_bin}" is invalid`));
       }
 
-      const tmpDir: string = os.tmpdir();
-
-      const tmpFileName: string = path.normalize(
-        `${tmpDir}/temp-${Math.random()
-          .toString(36)
-          .replace(/[^a-z]+/g, '')
-          .substr(0, 10)}.php`
-      );
-
-      try {
-        fs.writeFileSync(tmpFileName, text);
-      } catch (err) {
-        // @ts-ignore
-        this.widget.addToOutput(err.message);
-        return reject(new Error(`phpfmt: Cannot create tmp file in "${tmpDir}"`));
-      }
-
-      // test whether the php file has syntax error
-      try {
-        execSync(`${this.config.php_bin} -l ${tmpFileName}`, execOptions);
-      } catch (err) {
-        // @ts-ignore
-        this.widget.addToOutput(err.message);
-        // Window.setStatusBarMessage('phpfmt: Format failed - syntax errors found', 4500);
-        Window.showErrorMessage('phpfmt: Format failed - syntax errors found');
-        return reject();
-      }
-
-      const args: Array<string> = this.getArgs(tmpFileName);
-      args.unshift(`"${pharPath}"`);
-
-      let formatCmd: string;
-      if (!iniPath) {
-        formatCmd = `${this.config.php_bin} ${args.join(' ')}`;
-      } else {
-        formatCmd = `${this.config.php_bin} ${args[0]} --config=${iniPath} ${args.pop()}`;
-      }
-
-      this.widget.addToOutput(formatCmd);
-
-      try {
-        execSync(formatCmd, execOptions);
-      } catch (err) {
-        // @ts-ignore
-        this.widget.addToOutput(err.message).show();
-        return reject(new Error('phpfmt: Execute phpfmt failed'));
-      }
-
-      const formatted: string = fs.readFileSync(tmpFileName, 'utf-8');
-      try {
-        fs.unlinkSync(tmpFileName);
-      } catch (err) {}
-
-      if (formatted.length > 0) {
-        resolve(formatted);
-      } else {
-        reject();
-      }
+      const args = iniPath ? [pharPath, `--config=${iniPath}`, '-o=-', '-'] : [pharPath, ...this.args, '-o=-', '-'];
+      const child = spawn(this.config.php_bin, args, { cwd });
+      let output = '';
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      child.stdout.on('close', () => {
+        resolve(output);
+      });
+      child.stderr.on('data', (data) => {
+        const err = data.toString();
+        this.widget.addToOutput(err);
+        reject(err);
+      });
+      child.on('err', () => reject('phpfmt: faild:('));
+      child.stdin.write(text);
+      child.stdin.end();
     });
   }
 }

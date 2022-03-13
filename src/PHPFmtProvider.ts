@@ -9,13 +9,15 @@ import {
   DocumentSelector,
   QuickPickItem,
   TextEdit,
-  window,
   TextLine,
+  Uri,
+  LinesTextDocument,
 } from 'coc.nvim';
 import PHPFmt from './PHPFmt';
 import Widget from './Widget';
 import Transformations from './Transformations';
 import ITransformationItem from './ITransformationItem';
+import path from 'path';
 
 export default class PHPFmtProvider {
   private phpfmt: PHPFmt;
@@ -89,21 +91,43 @@ export default class PHPFmtProvider {
     });
   }
 
-  //   .then((result) => {
-  //   if (typeof result !== 'undefined') {
-  //     const output = transformations.getExample({
-  //       key: result.label,
-  //       description: result.description || '',
-  //     });
-  //     this.widget.addToOutput(output).show();
-  //   }
-  // });
-  // );
+  public async provideDocumentRangeFormattingEdits(document: LinesTextDocument, range: Range): Promise<TextEdit[]> {
+    let cwd = Workspace.getWorkspaceFolder(document.uri)?.uri;
+    if (cwd) {
+      cwd = path.normalize(Uri.parse(cwd).fsPath);
+    }
+    let originalText: string = document.getText(range);
+    if (originalText.replace(/\s+/g, '').length === 0) {
+      return [];
+    }
+
+    let hasModified = false;
+    if (originalText.search(/^\s*<\?php/i) === -1) {
+      originalText = `<?php\n${originalText}`;
+      hasModified = true;
+    }
+
+    let newText = await this.phpfmt.format(originalText, cwd);
+    if (hasModified) {
+      newText = newText.replace(/^<\?php\r?\n/, '');
+    }
+    if (newText !== originalText) {
+      return [TextEdit.replace(range, newText)];
+    }
+    return [];
+  }
+
+  public documentRangeFormattingEditProvider(): Disposable {
+    return Languages.registerDocumentRangeFormatProvider(this.documentSelector, {
+      provideDocumentRangeFormattingEdits: async (doc, range) => {
+        return await this.provideDocumentRangeFormattingEdits(doc, range);
+      },
+    });
+  }
 
   public documentFormattingEditProvider(): Disposable {
     return Languages.registerDocumentFormatProvider(this.documentSelector, {
       provideDocumentFormattingEdits: async (document) => {
-        const originalText: string = document.getText();
         let lastLine: TextLine;
         try {
           lastLine = document.lineAt(document.lineCount - 1);
@@ -111,52 +135,7 @@ export default class PHPFmtProvider {
           lastLine = document.lineAt(document.lineCount - 2);
         }
         const range: Range = Range.create(Position.create(0, 0), lastLine.range.end);
-
-        const newText = await this.phpfmt.format(originalText);
-        if (newText !== originalText) {
-          return [TextEdit.replace(range, newText)];
-        }
-        return [];
-      },
-    });
-  }
-
-  public documentRangeFormattingEditProvider(): Disposable {
-    return Languages.registerDocumentRangeFormatProvider(this.documentSelector, {
-      provideDocumentRangeFormattingEdits: (document, range) => {
-        return new Promise<any>((resolve, reject) => {
-          let originalText: string = document.getText(range);
-          if (originalText.replace(/\s+/g, '').length === 0) {
-            return reject();
-          }
-
-          let hasModified = false;
-          if (originalText.search(/^\s*<\?php/i) === -1) {
-            originalText = `<?php\n${originalText}`;
-            hasModified = true;
-          }
-
-          this.phpfmt
-            .format(originalText)
-            .then((newText: string) => {
-              if (hasModified) {
-                newText = newText.replace(/^<\?php\r?\n/, '');
-              }
-              if (newText !== originalText) {
-                // resolve([new TextEdit(range, text)]);
-                resolve([{ range, newText }]);
-              } else {
-                reject();
-              }
-            })
-            .catch((err) => {
-              if (err instanceof Error) {
-                Window.showErrorMessage(err.message);
-                this.widget.addToOutput(err.message);
-              }
-              reject();
-            });
-        });
+        return await this.provideDocumentRangeFormattingEdits(document, range);
       },
     });
   }
