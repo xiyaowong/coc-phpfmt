@@ -104,15 +104,12 @@ export default class PHPFmtProvider {
     return Languages.registerDocumentFormatProvider(this.documentSelector, {
       provideDocumentFormattingEdits: async (document) => {
         const originalText: string = document.getText();
-        console.log(originalText);
-        window.showMessage(`${document.lineCount}`);
         let lastLine: TextLine;
         try {
           lastLine = document.lineAt(document.lineCount - 1);
         } catch (e) {
           lastLine = document.lineAt(document.lineCount - 2);
         }
-        window.showMessage('coming here?');
         const range: Range = Range.create(Position.create(0, 0), lastLine.range.end);
 
         const newText = await this.phpfmt.format(originalText);
