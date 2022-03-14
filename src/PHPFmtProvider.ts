@@ -118,26 +118,34 @@ export default class PHPFmtProvider {
   }
 
   public documentRangeFormattingEditProvider(): Disposable {
-    return Languages.registerDocumentRangeFormatProvider(this.documentSelector, {
-      provideDocumentRangeFormattingEdits: async (doc, range) => {
-        return await this.provideDocumentRangeFormattingEdits(doc, range);
+    return Languages.registerDocumentRangeFormatProvider(
+      this.documentSelector,
+      {
+        provideDocumentRangeFormattingEdits: async (doc, range) => {
+          return await this.provideDocumentRangeFormattingEdits(doc, range);
+        },
       },
-    });
+      999
+    );
   }
 
   public documentFormattingEditProvider(): Disposable {
-    return Languages.registerDocumentFormatProvider(this.documentSelector, {
-      provideDocumentFormattingEdits: async (document) => {
-        let lastLine: TextLine;
-        try {
-          lastLine = document.lineAt(document.lineCount - 1);
-        } catch (e) {
-          lastLine = document.lineAt(document.lineCount - 2);
-        }
-        const range: Range = Range.create(Position.create(0, 0), lastLine.range.end);
-        return await this.provideDocumentRangeFormattingEdits(document, range);
+    return Languages.registerDocumentFormatProvider(
+      this.documentSelector,
+      {
+        provideDocumentFormattingEdits: async (document) => {
+          let lastLine: TextLine;
+          try {
+            lastLine = document.lineAt(document.lineCount - 1);
+          } catch (e) {
+            lastLine = document.lineAt(document.lineCount - 2);
+          }
+          const range: Range = Range.create(Position.create(0, 0), lastLine.range.end);
+          return await this.provideDocumentRangeFormattingEdits(document, range);
+        },
       },
-    });
+      999
+    );
   }
 
   public statusBarItem(): Disposable[] {
