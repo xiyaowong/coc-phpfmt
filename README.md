@@ -6,6 +6,56 @@ phpfmt extension for coc.nvim. Forked from [vscode-phpfmt](https://github.com/ko
 
 `:CocInstall coc-phpfmt`
 
+## Usage
+
+* Add a config file (`phpfmt.json`) to the root of your project or add the configs globally in your `coc-settings.json`.
+ 
+ <br>
+ 
+  Example of a `phpfmt.json` file:
+
+```json
+{
+    "phpfmt.php_bin": "php",
+    "editor.formatOnSave": true,
+    "phpfmt.excludes":
+    [
+        "WordWrap",
+        "NewLineBeforeReturn"
+    ],
+	"phpfmt.indent_with_space": 4,
+	"phpfmt.passes":
+	[
+        "AlignPHPCode",
+        "TrimSpaceBeforeSemicolon",
+        "DoubleToSingleQuote",
+        "RestoreComments",
+        "ShortArray",
+        "ReplaceIsNull",
+        "TightConcat"
+	],
+	"phpfmt.psr2": true
+}
+```
+<br>
+
+* Format the file:
+
+```
+:call CocAction('format')
+```
+
+<br>
+
+* It's probably a good idea to map this command to a key, e.g.:
+
+```
+nnoremap <M-f> :call FormatCurrentFile()<CR>
+```
+
+
+
+
 ## Commands
 
 | name                       | description                  |
