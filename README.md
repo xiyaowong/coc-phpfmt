@@ -50,7 +50,7 @@ phpfmt extension for coc.nvim. Forked from [vscode-phpfmt](https://github.com/ko
 * It's probably a good idea to map this command to a key, e.g.:
 
 ```
-nnoremap <M-f> :call FormatCurrentFile()<CR>
+nnoremap <M-f> :call CocAction('format')<CR>
 ```
 
 
